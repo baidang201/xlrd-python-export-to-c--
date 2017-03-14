@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 import sys
 import xlrd
+import traceback
 import logging
+from logging.handlers import RotatingFileHandler
+
 
 reload(sys)
 sys.setdefaultencoding('gbk')
@@ -12,8 +15,9 @@ logger = logging.getLogger(logger_name)
 logger.setLevel(logging.DEBUG)
 
 # create file handler
-log_path = "./log.log"
-fh = logging.FileHandler(log_path)
+log_path = "./excel.log"
+fh = RotatingFileHandler(log_path, mode='a', maxBytes=5*1024*1024, 
+                                 backupCount=2, encoding=None, delay=0)
 fh.setLevel(logging.WARN)
 
 # create formatter
@@ -25,34 +29,21 @@ formatter = logging.Formatter(fmt, datefmt)
 fh.setFormatter(formatter)
 logger.addHandler(fh)
 
+def get_function_name():
+    return traceback.extract_stack(None, 2)[0][2]
+	
 g_book = None
-'''
-def readxls():
-	book = xlrd.open_workbook("t.xls")
-	print("The number of worksheets is {0}".format(book.nsheets))
-	print("Worksheet name(s): {0}".format(book.sheet_names()))
-	sh = book.sheet_by_index(0)
-	print("{0} {1} {2}".format(sh.name, sh.nrows, sh.ncols))
-	print("Cell a1 is {0}".format(sh.cell_value(rowx=0, colx=0)))
-	for rx in range(sh.nrows):
-		print(sh.row(rx))
-
-def readxlsx():
-	book = xlrd.open_workbook("t.xlsx")
-	print("The number of worksheets is {0}".format(book.nsheets))
-	print("Worksheet name(s): {0}".format(book.sheet_names()))
-	sh = book.sheet_by_index(0)
-	print("{0} {1} {2}".format(sh.name, sh.nrows, sh.ncols))
-	print("Cell a1 is {0}".format(sh.cell_value(rowx=0, colx=0)))
-	for rx in range(sh.nrows):
-		print(sh.row(rx))
-'''	
-
 def OpenXlsOrXlsxFile(xlspath):
 	global g_book #todo(liyh) 后面修改为类的方式 
-	logger.warn("open xls " + xlspath)
-	g_book = xlrd.open_workbook(xlspath)
-	return g_book
+	try:
+		logger.warn(get_function_name() + xlspath)
+		g_book = xlrd.open_workbook(xlspath)
+	except:
+		e = sys.exc_info()[0]
+		logger.error(e)
+		logger.error(traceback.format_exc())
+	finally:
+		return g_book	
 
 def CloseXls():
 	global g_book
@@ -62,17 +53,18 @@ def CloseXls():
 
 def GetSheetByIndex(book, sheetIndex):
 	index = 0
-	logger.warn("GetSheetByIndex " + str(sheetIndex))
+	logger.warn(get_function_name() + str(sheetIndex))
 	s = book.sheet_by_index(sheetIndex)    
 	return s
 
 def GetRowCount(sheetIndex):
 	global g_book 
 	if None == g_book:
+		logger.error(get_function_name() + "g_book is None" )
 		return 0
 	
 	sheet = g_book.sheet_by_index(sheetIndex)
-	logger.warn("GetRowCount " )
+	logger.warn(get_function_name() )
 	rowCount = 0
 	rowCount = sheet.nrows
 	return rowCount
@@ -80,10 +72,11 @@ def GetRowCount(sheetIndex):
 def GetColCount(sheetIndex):
 	global g_book
 	if None == g_book:
+		logger.error(get_function_name() + "g_book is None" )
 		return 0
 	
 	sheet = g_book.sheet_by_index(sheetIndex)	
-	logger.warn("GetColCount " )
+	logger.warn(get_function_name() )
 	colCount = 0
 	colCount = sheet.ncols
 	return colCount
@@ -91,26 +84,52 @@ def GetColCount(sheetIndex):
 def GetValue(sheetIndex, row, col):
 	global g_book
 	if None == g_book:
+		logger.error(get_function_name() + "g_book is None" )
 		return ""
 	
-	sheet = g_book.sheet_by_index(sheetIndex)	
-	logger.warn("GetValue " )
 	val = ""
-	val = str(sheet.cell_value(rowx=row, colx=col))
-	val=val.strip(' \t\n\r')
-	return val
+	try:
+		sheet = g_book.sheet_by_index(sheetIndex)	
+		logger.warn(get_function_name() )
+		
+		cty = sheet.cell_type(row, col)
+		if xlrd.XL_CELL_EMPTY == cty:
+			return val
+		elif xlrd.XL_CELL_DATE == cty:
+			return 
+		elif xlrd.XL_CELL_ERROR == cty:
+			return val
+		else:	
+			val = str(sheet.cell_value(rowx=row, colx=col))
+			
+		val = str(sheet.cell_value(rowx=row, colx=col))
+		val=val.strip(' \t\n\r')
+	except:
+		e = sys.exc_info()[0]
+		logger.error(e)
+		logger.error(traceback.format_exc())
+	finally:
+		return val
+	
+def test():
+	#book = OpenXlsOrXlsxFile("C:/Users/Administrator/Desktop/temp.xls")
+	book = OpenXlsOrXlsxFile("C:/Users/Administrator/Desktop/template2.xls")
+	print book
+	sheet = GetSheetByIndex(book, 0)
+	print sheet.nrows  
+	print sheet.ncols
+	print sheet
 
-'''
-book = OpenXlsOrXlsxFile("t.xlsx")
-print book
-sheet = GetSheetByIndex(book, 0)
-print sheet
-
-print "g_book ", g_book
-rows = GetRowCount(0) 
-print rows
-cols = GetColCount(0)
-print cols 
-value =GetValue(0, 0, 0)
-print value
-'''
+	print "g_book ", g_book
+	rows = GetRowCount(0) 
+	print rows
+	cols = GetColCount(0)
+	print cols 
+	value =GetValue(0, 0, 0)
+	print value
+	
+	for r in range(sheet.nrows):
+		for c in range(sheet.ncols):
+			print str(sheet.cell_value(r,c))
+	
+test()
